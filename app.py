@@ -10,7 +10,7 @@ from datetime import date, timedelta
 
 from flask import Flask, g, jsonify, render_template, request
 
-FINE_PER_DAY = 2.0          # fine per overdue day per book (Rs.)
+FINE_PER_DAY = 2.5          # fine per overdue day per book (Rs.)
 MAX_RENT_DAYS = 30
 
 SEED_BOOKS = [
