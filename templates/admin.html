@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Dashboard - Online Library</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>🛠️ Library Admin Dashboard</h1>
+    <nav><a href="/">Browse Books</a><a href="/admin">Admin Dashboard</a></nav>
+  </header>
+
+  <div class="container">
+    <div class="stats">
+      <div class="stat"><div class="n" id="sTitles">0</div><div class="l">Book titles</div></div>
+      <div class="stat"><div class="n" id="sAvail">0</div><div class="l">Copies available</div></div>
+      <div class="stat"><div class="n" id="sActive">0</div><div class="l">Active rentals</div></div>
+      <div class="stat"><div class="n">₹<span id="sRev">0</span></div><div class="l">Total revenue (rent + fines)</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Rental Records</h2>
+      <table>
+        <thead><tr><th>Rental ID</th><th>Member</th><th>Books</th><th>Rented</th><th>Due</th><th>Amount</th><th>Fine</th><th>Status</th><th></th></tr></thead>
+        <tbody id="rentals"></tbody>
+      </table>
+    </div>
+
+    <div class="panel">
+      <h2>Add a Book</h2>
+      <form id="addForm" class="form-row">
+        <div class="field"><label>Title</label><input name="title" required></div>
+        <div class="field"><label>Author</label><input name="author" required></div>
+        <div class="field"><label>Category</label><input name="category" required></div>
+        <div class="field"><label>Copies</label><input name="copies" type="number" min="1" value="1" required></div>
+        <div class="field"><label>Rent / day (₹)</label><input name="price_per_day" type="number" min="1" step="0.5" value="4" required></div>
+        <div class="field"><button type="submit">Add Book</button></div>
+      </form>
+    </div>
+
+    <div class="panel">
+      <h2>Inventory</h2>
+      <table>
+        <thead><tr><th>ID</th><th>Title</th><th>Author</th><th>Category</th><th>Available / Total</th><th>Rent/day</th><th></th></tr></thead>
+        <tbody id="inventory"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg, err=false){const t=$("toast");t.textContent=msg;t.className=err?"error":"";t.style.display="block";setTimeout(()=>t.style.display="none",3000);}
+
+async function refresh() {
+  const [s, r, b] = await Promise.all([
+    fetch("/api/stats").then(x => x.json()),
+    fetch("/api/rentals").then(x => x.json()),
+    fetch("/api/books").then(x => x.json()),
+  ]);
+  $("sTitles").textContent = s.titles; $("sAvail").textContent = s.available;
+  $("sActive").textContent = s.active_rentals; $("sRev").textContent = s.revenue.toFixed(2);
+
+  $("rentals").innerHTML = r.length ? r.map(x => {
+    const cls = x.status === "RETURNED" ? "b-returned" : (x.overdue ? "b-overdue" : "b-active");
+    const label = x.overdue ? "OVERDUE" : x.status;
+    return `<tr><td><strong>${esc(x.rental_id)}</strong></td>
+      <td>${esc(x.member_name)}<br><small>${esc(x.member_id)}</small></td>
+      <td>${x.books.map(esc).join("<br>")}</td>
+      <td>${x.rented_on}</td><td>${x.due_on}</td>
+      <td>₹${x.total_amount.toFixed(2)}</td><td>₹${x.fine.toFixed(2)}</td>
+      <td><span class="badge ${cls}">${label}</span></td>
+      <td>${x.status === "ACTIVE" ? `<button onclick="returnRental('${esc(x.rental_id)}')">Mark Returned</button>` : ""}</td></tr>`;
+  }).join("") : '<tr><td colspan="9" class="empty">No rentals yet.</td></tr>';
+
+  $("inventory").innerHTML = b.map(x => `<tr><td>${x.id}</td><td>${esc(x.title)}</td><td>${esc(x.author)}</td>
+    <td>${esc(x.category)}</td><td>${x.available_copies} / ${x.total_copies}</td><td>₹${x.price_per_day.toFixed(2)}</td>
+    <td><button class="danger" onclick="delBook(${x.id})">Delete</button></td></tr>`).join("");
+}
+
+async function returnRental(id) {
+  const res = await fetch(`/api/rentals/${id}/return`, {method: "POST"});
+  const d = await res.json();
+  if (!res.ok) return toast(d.error, true);
+  toast(d.fine ? `Returned. Late by ${d.late_days} day(s), fine ₹${d.fine}` : "Returned on time");
+  refresh();
+}
+async function delBook(id) {
+  if (!confirm("Delete this book?")) return;
+  const res = await fetch(`/api/books/${id}`, {method: "DELETE"});
+  const d = await res.json();
+  if (!res.ok) return toast(d.error, true);
+  refresh();
+}
+$("addForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target));
+  const res = await fetch("/api/books", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  const d = await res.json();
+  if (!res.ok) return toast(d.error, true);
+  toast("Book added"); e.target.reset(); refresh();
+});
+refresh();
+</script>
+</body>
+</html>

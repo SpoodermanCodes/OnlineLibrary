@@ -1,0 +1,22 @@
+---
+- name: Deploy Online Library container
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Create persistent volume for the SQLite database
+      community.docker.docker_volume:
+        name: library_data
+
+    - name: Run Online Library container
+      community.docker.docker_container:
+        name: online-library-ansible
+        image: online-library-ci
+        state: started
+        recreate: yes
+        restart_policy: always
+        published_ports:
+          - "5001:5000"
+        volumes:
+          - "library_data:/app/data"

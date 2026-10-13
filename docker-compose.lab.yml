@@ -1,0 +1,26 @@
+# DevOps lab: Jenkins + Ansible control container (NOT the application itself).
+# Start with:  docker compose -f docker-compose.lab.yml up -d --build
+services:
+  jenkins:
+    build: ./jenkins
+    container_name: jenkins
+    user: root                       # lets Jenkins use /var/run/docker.sock
+    ports:
+      - "9091:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  ansible:
+    build: ./ansible
+    container_name: ansible-docker-lab
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./ansible/docker-deploy.yml:/docker-deploy.yml:ro
+      - ./ansible/inventory.ini:/inventory.ini:ro
+    restart: unless-stopped
+
+volumes:
+  jenkins_home:
